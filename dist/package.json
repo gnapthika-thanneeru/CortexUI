@@ -1,0 +1,17 @@
+{
+		"version": "1.0.0.0",
+		"author": {"name":"Gnapthika","email":"Gnapthika.T@brillio.com"},
+		"resources": [
+			{
+				"resourceId": "rId0",
+				"sourceType": 5,
+				"file": "resources/agentPythonProxyChat5D2110A8D4D64FDEAF377B7C821B2E51.pbiviz.json"
+			}
+		],
+		"visual": {"name":"agentPythonProxyChat","displayName":"AgentPythonProxyChat","guid":"agentPythonProxyChat5D2110A8D4D64FDEAF377B7C821B2E51","visualClassName":"Visual","version":"1.0.0.0","description":"Python proxy chat visual for Power BI","supportUrl":"https://example.com","gitHubUrl":"https://github.com/example/agentPythonProxyChat"},
+		"metadata": {
+			"pbivizjson": {
+				"resourceId": "rId0"
+			}
+		}
+	}
