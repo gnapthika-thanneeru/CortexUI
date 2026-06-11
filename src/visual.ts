@@ -9,44 +9,55 @@ import IVisual = powerbi.extensibility.visual.IVisual;
 
 export class Visual implements IVisual {
     private target: HTMLElement;
-    private chatContainer: HTMLDivElement;
+    private messagesBox: HTMLDivElement;
     private inputBox: HTMLTextAreaElement;
     private sendButton: HTMLButtonElement;
-    private answerBox: HTMLDivElement;
 
     constructor(options: VisualConstructorOptions) {
         this.target = options.element;
-        this.target.innerHTML = "";
+
+        while (this.target.firstChild) {
+            this.target.removeChild(this.target.firstChild);
+        }
 
         const wrapper = document.createElement("div");
         wrapper.className = "chat-wrapper";
 
         const title = document.createElement("div");
         title.className = "chat-title";
-        title.innerText = "Agent Python Proxy Chat";
+        title.textContent = "Agent Chat";
 
-        this.chatContainer = document.createElement("div");
-        this.chatContainer.className = "chat-container";
+        this.messagesBox = document.createElement("div");
+        this.messagesBox.className = "chat-messages";
+
+        const inputArea = document.createElement("div");
+        inputArea.className = "chat-input-area";
 
         this.inputBox = document.createElement("textarea");
         this.inputBox.className = "chat-input";
-        this.inputBox.placeholder = "Ask a question...";
+        this.inputBox.placeholder = "Ask anything...";
 
         this.sendButton = document.createElement("button");
         this.sendButton.className = "chat-button";
-        this.sendButton.innerText = "Send";
-
-        this.answerBox = document.createElement("div");
-        this.answerBox.className = "chat-answer";
+        this.sendButton.textContent = "Send";
 
         this.sendButton.onclick = async () => {
             await this.askPythonBackend();
         };
 
+        this.inputBox.addEventListener("keydown", async (event: KeyboardEvent) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                await this.askPythonBackend();
+            }
+        });
+
+        inputArea.appendChild(this.inputBox);
+        inputArea.appendChild(this.sendButton);
+
         wrapper.appendChild(title);
-        wrapper.appendChild(this.inputBox);
-        wrapper.appendChild(this.sendButton);
-        wrapper.appendChild(this.answerBox);
+        wrapper.appendChild(this.messagesBox);
+        wrapper.appendChild(inputArea);
 
         this.target.appendChild(wrapper);
     }
@@ -59,11 +70,13 @@ export class Visual implements IVisual {
         const userQuestion = this.inputBox.value.trim();
 
         if (!userQuestion) {
-            this.answerBox.innerHTML = "<p>Please enter a question.</p>";
             return;
         }
 
-        this.answerBox.innerHTML = "<p>Thinking...</p>";
+        this.addMessage(userQuestion, "user");
+        this.inputBox.value = "";
+
+        const loadingMessage = this.addMessage("Thinking...", "bot");
 
         try {
             const response = await fetch("http://localhost:8000/ask", {
@@ -82,94 +95,54 @@ export class Visual implements IVisual {
 
             const data = await response.json();
 
-            this.renderResponse(data);
-        } catch (error) {
-            console.error(error);
-            this.answerBox.innerHTML = `
-                <p><strong>Error:</strong> Could not connect to Python backend.</p>
-                <p>Make sure this is running:</p>
-                <pre>python -m uvicorn app:app --host 0.0.0.0 --port 8000</pre>
-            `;
-        }
-    }
+            loadingMessage.remove();
 
-    private renderResponse(data: any): void {
-        this.answerBox.innerHTML = "";
-
-        if (data.answer) {
-            const answer = document.createElement("div");
-            answer.className = "answer-text";
-            answer.innerHTML = this.formatMarkdown(data.answer);
-            this.answerBox.appendChild(answer);
-        }
-
-        if (data.chart) {
-            const chart = document.createElement("div");
-            chart.className = "chart-container";
-
-            if (typeof data.chart === "string") {
-                chart.innerHTML = data.chart;
-            } else {
-                chart.innerHTML = `<pre>${JSON.stringify(data.chart, null, 2)}</pre>`;
+            if (data.answer) {
+                this.addMessage(data.answer, "bot");
             }
 
-            this.answerBox.appendChild(chart);
-        }
+            if (data.chart) {
+                this.addMessage(JSON.stringify(data.chart, null, 2), "bot");
+            }
 
-        if (data.tables && Array.isArray(data.tables)) {
-            data.tables.forEach((tableData: any) => {
-                const tableElement = this.renderTable(tableData);
-                this.answerBox.appendChild(tableElement);
-            });
+            if (data.tables && Array.isArray(data.tables)) {
+                this.addMessage(JSON.stringify(data.tables, null, 2), "bot");
+            }
+
+        } catch (error) {
+            console.error(error);
+            loadingMessage.remove();
+            this.addMessage(
+                "Error: Could not connect to Python backend. Make sure uvicorn is running on port 8000.",
+                "bot"
+            );
         }
     }
 
-    private formatMarkdown(text: string): string {
-        return text
-            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\n/g, "<br>");
-    }
+    private addMessage(text: string, sender: "user" | "bot"): HTMLDivElement {
+        const row = document.createElement("div");
+        row.className = sender === "user" ? "message-row user-row" : "message-row bot-row";
 
-    private renderTable(tableData: any): HTMLElement {
-        const tableWrapper = document.createElement("div");
-        tableWrapper.className = "table-wrapper";
+        const bubble = document.createElement("div");
+        bubble.className = sender === "user" ? "message-bubble user-bubble" : "message-bubble bot-bubble";
 
-        const table = document.createElement("table");
+        const formattedText = text
+            .replace(/\*\*(.*?)\*\*/g, "$1")
+            .split("\n");
 
-        if (Array.isArray(tableData) && tableData.length > 0) {
-            const headers = Object.keys(tableData[0]);
+        formattedText.forEach((line, index) => {
+            if (index > 0) {
+                bubble.appendChild(document.createElement("br"));
+            }
+            bubble.appendChild(document.createTextNode(line));
+        });
 
-            const thead = document.createElement("thead");
-            const headerRow = document.createElement("tr");
+        row.appendChild(bubble);
+        this.messagesBox.appendChild(row);
 
-            headers.forEach(header => {
-                const th = document.createElement("th");
-                th.innerText = header;
-                headerRow.appendChild(th);
-            });
+        this.messagesBox.scrollTop = this.messagesBox.scrollHeight;
 
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            const tbody = document.createElement("tbody");
-
-            tableData.forEach(row => {
-                const tr = document.createElement("tr");
-
-                headers.forEach(header => {
-                    const td = document.createElement("td");
-                    td.innerText = row[header];
-                    tr.appendChild(td);
-                });
-
-                tbody.appendChild(tr);
-            });
-
-            table.appendChild(tbody);
-        }
-
-        tableWrapper.appendChild(table);
-        return tableWrapper;
+        return row;
     }
 
     public getFormattingModel(): powerbi.visuals.FormattingModel {
