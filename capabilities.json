@@ -81,7 +81,7 @@
             "essential": true,
             "parameters": [
                 
-                "http://localhost:8000"
+                "https://2wr5rcprue.us-east-1.awsapprunner.com/"
 
             ]
         }
